@@ -21,7 +21,7 @@ pygame.init()
 XSCALE=640
 YSCALE=480
 BRIGHTNESS=2.0
-FONT = pygame.font.SysFont("FreeSans",30)
+FONT = pygame.font.SysFont("FreeSans",50)
 
 camera = highgui.cvCreateCameraCapture(0)
 
@@ -80,6 +80,13 @@ def load_script(filename):
   
   return script
 
+#####
+def calc_position(x,y,rect):
+  width=XSCALE-rect.width
+  height=YSCALE-rect.height
+  x=int(x)*width/100
+  y=int(y)*height/100
+  return x,y
        
 def parse(line,surface):
   items=line.split(",")
@@ -92,15 +99,16 @@ def parse(line,surface):
 # TEXT: show a line of text in a specific color
   elif command == "TEXT":
     text=FONT.render(items[1], True, pygame.Color(items[4]))
-    x=int(items[2])*XSCALE/100
-    y=int(items[3])*YSCALE/100
+    rec=text.get_rect()
+    x,y=calc_position(items[2],items[3],rec)
+    rec.inflate_ip(100,50)
+    pygame.draw.ellipse(surface, (255,255,255), (x-50,y-25,rec.width,rec.height), 0)
     surface.blit(text,(x,y))  
 # imagefile, xpos, ypos : show an image in a relative position
   elif len(items) == 3:
     print "  New image"
     pic,rec=load_image(items[0],-1)
-    x=int(items[1])*XSCALE/100
-    y=int(items[2])*YSCALE/100
+    x,y=calc_position(items[1],items[2],rec)
     surface.blit(pic,(x,y))
   return surface                                                                     
 

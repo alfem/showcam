@@ -1,8 +1,6 @@
 # This is a comment
-guadalinexv7.png,30,0
 page
-text,Que demonios hago?,0,0,#ff0000
+text,Que es Guadalinex?,100,0,#aa0000
 page
-galleta_guadalinex_v7.png,0,0                  
-galleta_guadalinex_v7.png,80,0    
-galleta_guadalinex_v7.png,50,50
+guadalinexv7.png,50,0
+galleta_guadalinex_v7.png,100,50    
