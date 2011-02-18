@@ -1,0 +1,168 @@
+#!/usr/bin/python
+
+# Showcam 1.0
+# Realtime mixes webcam and transparent pics to make an awesome presentation
+# Copyright Alfonso E.M. 2011
+# This program is distributed under the terms of GPL (General Public License) version 2.0
+
+
+import pygame
+import Image
+from pygame.locals import *
+import sys
+from PIL import ImageEnhance
+from PIL import ImageOps
+
+import opencv
+from opencv import highgui 
+
+pygame.init()
+
+XSCALE=640
+YSCALE=480
+BRIGHTNESS=2.0
+FONT = pygame.font.SysFont("FreeSans",30)
+
+camera = highgui.cvCreateCameraCapture(0)
+
+#####
+def get_image():
+    im = highgui.cvQueryFrame(camera)
+
+# Add the line below if you need it (Ubuntu 8.04+)
+    im = opencv.cvGetMat(im)
+
+# Resize image
+    resized_im=opencv.cvCreateImage(opencv.cvSize(XSCALE,YSCALE),8,3)
+    opencv.cvResize( im, resized_im, opencv.CV_INTER_CUBIC);
+
+# Convert Ipl to PIL format
+    pil_img = opencv.adaptors.Ipl2PIL(resized_im)
+
+    enhancer=ImageEnhance.Brightness(pil_img)
+    pil_img=enhancer.enhance(BRIGHTNESS)
+    pil_img=ImageOps.mirror(pil_img)
+
+    return pil_img
+
+#####
+def load_image(name, colorkey=None):
+    fullname = name
+    try:
+      image = pygame.image.load(fullname)
+    except pygame.error, message:
+      print 'Cannot load image:', name
+      raise SystemExit, message
+      image = image.convert()
+    if colorkey is not None:
+      if colorkey is -1:
+        colorkey = image.get_at((0,0))
+        image.set_colorkey(colorkey, RLEACCEL)
+    return image, image.get_rect()
+
+#####
+def load_script(filename):
+       
+  try:
+    scriptfile = open(filename, 'r')
+    lines=scriptfile.readlines()
+    scriptfile.close
+  except:
+    print "Scriptfile is not readable"
+    sys.exit(8)
+  
+  script=[]
+  for line in lines:
+    line=line.strip()
+    line=line.rstrip("\n")
+    if line[0] != "#":
+      script.append(line)  
+  
+  return script
+
+       
+def parse(line,surface):
+  items=line.split(",")
+  command=items[0].upper()
+
+# PAGE : start with a new clean foreground page   
+  if command == "PAGE":
+    print "  Clearing"
+    surface.fill((255,0,255))
+# TEXT: show a line of text in a specific color
+  elif command == "TEXT":
+    text=FONT.render(items[1], True, pygame.Color(items[4]))
+    x=int(items[2])*XSCALE/100
+    y=int(items[3])*YSCALE/100
+    surface.blit(text,(x,y))  
+# imagefile, xpos, ypos : show an image in a relative position
+  elif len(items) == 3:
+    print "  New image"
+    pic,rec=load_image(items[0],-1)
+    x=int(items[1])*XSCALE/100
+    y=int(items[2])*YSCALE/100
+    surface.blit(pic,(x,y))
+  return surface                                                                     
+
+
+################
+# MAIN PROGRAM #
+################
+
+fps = 30.0
+
+
+window = pygame.display.set_mode((XSCALE,YSCALE))
+pygame.display.set_caption("ShowCam")
+screen = pygame.display.get_surface()
+
+foreground = pygame.Surface((XSCALE,YSCALE))
+foreground.fill((255,0,255))
+foreground.set_colorkey((255,0,255))
+
+
+script=load_script("demo.show")
+
+slide=0  
+
+while True:
+
+  print "Slide:",script[slide]
+  picsLayer=parse(script[slide], foreground)
+
+  old_slide = slide
+  
+  while slide == old_slide:
+
+    webcam = get_image()
+
+    webcamLayer = pygame.image.frombuffer(webcam.tostring(), webcam.size, webcam.mode)
+
+    screen.blit(webcamLayer, (0,0))
+    screen.blit(picsLayer, (0,0))
+
+    pygame.display.flip()
+
+# Keys and mouse management
+    events = pygame.event.get()
+    for event in events:
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_ESCAPE] or event.type ==QUIT:
+                sys.exit()
+        if keys[pygame.K_BACKSPACE] or keys[pygame.K_PAGEUP] or keys[pygame.K_LEFT]:
+          if slide > 0:
+            slide-=1
+        if keys[pygame.K_RETURN] or keys[pygame.K_PAGEDOWN] or keys[pygame.K_RIGHT]:
+          if slide < len(script) - 1:
+            slide+=1
+        if keys[pygame.K_PLUS]:
+          BRIGHTNESS+=0.1          
+        if keys[pygame.K_MINUS]:
+          BRIGHTNESS-=0.1          
+        if keys[pygame.K_SPACE]:
+          print "Capturing..."
+          pygame.image.save(screen,"test.jpg")          
+
+    pygame.time.delay(int(1000 * 1.0/fps))
+    
+
