@@ -5,7 +5,7 @@
 # Copyright Alfonso E.M. 2011
 # This program is distributed under the terms of GPL (General Public License) version 2.0
 
-
+import getopt
 import pygame
 import Image
 from pygame.locals import *
@@ -18,12 +18,12 @@ from opencv import highgui
 
 pygame.init()
 
-XSCALE=640
-YSCALE=480
-BRIGHTNESS=2.0
+XSCALE=800
+YSCALE=600
+BRIGHTNESS=1.0
+fps = 30.0
 FONT = pygame.font.SysFont("FreeSans",50)
 
-camera = highgui.cvCreateCameraCapture(0)
 
 #####
 def get_image():
@@ -53,11 +53,9 @@ def load_image(name, colorkey=None):
     except pygame.error, message:
       print 'Cannot load image:', name
       raise SystemExit, message
-      image = image.convert()
-    if colorkey is not None:
-      if colorkey is -1:
-        colorkey = image.get_at((0,0))
-        image.set_colorkey(colorkey, RLEACCEL)
+    if colorkey is -1:
+      colorkey = image.get_at((0,0))
+      image.set_colorkey(colorkey, RLEACCEL)
     return image, image.get_rect()
 
 #####
@@ -68,7 +66,7 @@ def load_script(filename):
     lines=scriptfile.readlines()
     scriptfile.close
   except:
-    print "Scriptfile is not readable"
+    print filename," scriptfile is not readable"
     sys.exit(8)
   
   script=[]
@@ -91,56 +89,99 @@ def calc_position(x,y,rect):
 def parse(line,surface):
   items=line.split(",")
   command=items[0].upper()
-
+  action=""
 # PAGE : start with a new clean foreground page   
   if command == "PAGE":
     print "  Clearing"
     surface.fill((255,0,255))
-# TEXT: show a line of text in a specific color
+    foreground.set_colorkey((255,0,255))
+  elif command == "PAUSE":
+    print "  Pause..."
+    action = "pause"
+# TEXT: show a line of text in a specific color (in a balloon)
   elif command == "TEXT":
     text=FONT.render(items[1], True, pygame.Color(items[4]))
     rec=text.get_rect()
     x,y=calc_position(items[2],items[3],rec)
     rec.inflate_ip(100,50)
     pygame.draw.ellipse(surface, (255,255,255), (x-50,y-25,rec.width,rec.height), 0)
+    pygame.draw.ellipse(surface, (0,0,0), (x-50,y-25,rec.width,rec.height), 1)
     surface.blit(text,(x,y))  
 # imagefile, xpos, ypos : show an image in a relative position
   elif len(items) == 3:
     print "  New image"
-    pic,rec=load_image(items[0],-1)
+    pic,rec=load_image(items[0],None)
     x,y=calc_position(items[1],items[2],rec)
     surface.blit(pic,(x,y))
-  return surface                                                                     
+  else:
+     print "Wrong line: ",line
+    
+  return surface,action                                                              
 
+#####
+def search_last_page(line):
+  while not script[line].upper().startswith("PAGE"):
+    line-=1
+  return line
+
+def show_help():
+  print "Showcam"
+  print "  -f script file  (default is 'demo.show')"
+  print "  -s fullscreen   (default is windowed)"
+  print ""  
 
 ################
-# MAIN PROGRAM #
+# MAIN         #
 ################
 
-fps = 30.0
+FULLSCREEN=False
+SHOWFILE="demo.show"
 
+try:                                
+  opts, args = getopt.getopt(sys.argv[1:], "hsf:", ["help", "fullscreen","file="]) 
+except getopt.GetoptError:           
+  show_help()
+  sys.exit(2)                     
 
-window = pygame.display.set_mode((XSCALE,YSCALE))
+for opt, arg in opts:                
+  if opt in ("-h", "--help"):
+    show_help()                     
+    sys.exit()                  
+  elif opt == '-s':
+    FULLSCREEN=True
+  elif opt in ("-f", "--file"): 
+    SHOWFILE = arg         
+
+if FULLSCREEN:
+  print "Fullscreen"
+  window = pygame.display.set_mode((XSCALE,YSCALE),pygame.FULLSCREEN)
+else:
+  window = pygame.display.set_mode((XSCALE,YSCALE))
+
 pygame.display.set_caption("ShowCam")
 screen = pygame.display.get_surface()
+
+camera = highgui.cvCreateCameraCapture(0)
 
 foreground = pygame.Surface((XSCALE,YSCALE))
 foreground.fill((255,0,255))
 foreground.set_colorkey((255,0,255))
 
 
-script=load_script("demo.show")
+script=load_script(SHOWFILE)
 
-slide=0  
+line=0  
 
 while True:
 
-  print "Slide:",script[slide]
-  picsLayer=parse(script[slide], foreground)
+  print "Line:",script[line]
+  picsLayer,action=parse(script[line], foreground)
+  old_line = line
 
-  old_slide = slide
-  
-  while slide == old_slide:
+  if action != "pause":
+    line +=1
+  else:  
+   while line == old_line:
 
     webcam = get_image()
 
@@ -158,11 +199,12 @@ while True:
         if keys[pygame.K_ESCAPE] or event.type ==QUIT:
                 sys.exit()
         if keys[pygame.K_BACKSPACE] or keys[pygame.K_PAGEUP] or keys[pygame.K_LEFT]:
-          if slide > 0:
-            slide-=1
+# (awful method for backwards movement)
+          lastpage=search_last_page(line) 
+          line=search_last_page(lastpage-1) 
         if keys[pygame.K_RETURN] or keys[pygame.K_PAGEDOWN] or keys[pygame.K_RIGHT]:
-          if slide < len(script) - 1:
-            slide+=1
+          if line < len(script) - 1:
+            line+=1
         if keys[pygame.K_PLUS]:
           BRIGHTNESS+=0.1          
         if keys[pygame.K_MINUS]:
@@ -172,5 +214,6 @@ while True:
           pygame.image.save(screen,"test.jpg")          
 
     pygame.time.delay(int(1000 * 1.0/fps))
+
     
 
